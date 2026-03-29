@@ -2,7 +2,7 @@ import time
 import torch
 from torch.optim import Adam
 
-from physics import CartPoleState, step
+from physics import CartPoleStateBatched, step_batched, fps
 from model import CartPoleModel
 
 if __name__ == "__main__":
@@ -14,36 +14,42 @@ if __name__ == "__main__":
     device = torch.device("cpu")
     model.to(device)
 
-    batch_size = 64
-    lr = 1e-3
+    batch_size = 1024
+    lr = 1e-2
     optimizer = Adam(model.parameters(), lr=lr)
 
-    solved_lifetime = 7200
+    solved_lifetime = 120 * fps
+
+    reward_gamma = 0.75 ** (1.0 / fps)
 
     epoch = 0
-    print_interval = 5.0
-    lifetimes = []
-    iterations = []
+    print_interval = 3.0
+    n_tracks = 0
+    sum_lifetime = 0
+    n_iterations = 0
+    n_solved = 0
     start_time = time.time()
     while True:
         if time.time() - start_time > print_interval:
-            avg_lifetime = sum(lifetimes) / len(lifetimes) if len(lifetimes) else 0
+            avg_lifetime = sum_lifetime / n_tracks if n_tracks else 0
             elapsed_time = time.time() - start_time
-            avg_it_ps = sum(iterations) / elapsed_time
-            print(f"epoch: {epoch}, avg lifetime: {avg_lifetime:.1f}, {avg_it_ps:.1f} it/s")
-            lifetimes = []
-            iterations = []
+            avg_it_ps = n_iterations / elapsed_time
+            solved_ratio = n_solved / n_tracks * 100.0
+            print(f"epoch: {epoch}, avg lifetime: {avg_lifetime:.1f}, {avg_it_ps:.1f} it/s, {solved_ratio:.1f}% solved")
+            n_tracks = 0
+            sum_lifetime = 0
+            n_iterations = 0
+            n_solved = 0
             start_time = time.time()
             pass
 
-        states = [CartPoleState() for _ in range(batch_size)]
+        batch = CartPoleStateBatched(batch_size=batch_size, device=device)
         log_probs = []
-        rewards = [[] for _ in range(batch_size)]
-        masks = [[] for _ in range(batch_size)]
+        rewards = []
+        masks = []
 
-        for _ in range(solved_lifetime):
-            state_tensor = torch.stack([state.to_tensor(device=device) for state in states])
-            logits = model(state_tensor)
+        for t in range(solved_lifetime):
+            logits = model(batch.states)
             probs = torch.softmax(logits, dim=-1)
 
             dist = torch.distributions.Categorical(probs)
@@ -52,40 +58,33 @@ if __name__ == "__main__":
             log_prob = dist.log_prob(actions)
             log_probs.append(log_prob)
 
-            actions_list = actions.to(torch.device("cpu")).tolist()
-
-            n_alive = 0
-            for i in range(batch_size):
-                masks[i].append(1.0 if states[i].is_alive else 0.0)
-
-                force = -1.0 if actions_list[i] == 0 else 1.0
-                states[i] = step(states[i], force)
-
-                if states[i].is_alive:
-                    n_alive += 1
-                    rewards[i].append(1.0)
+            with torch.no_grad():
+                masks.append(batch.is_alive * 1.0)
+                batch = step_batched(batch, force=actions * 2.0 - 1.0)  # [-1.0, 1.0]
+                if t == solved_lifetime - 1:
+                    rewards.append(batch.is_alive * (1.0 / (1.0 - reward_gamma)))
+                    n_solved += batch.count_alive()
                 else:
-                    rewards[i].append(0.0)
+                    rewards.append(batch.is_alive * 1.0)
+                    if batch.count_alive() == 0:
+                        break
 
-            if n_alive == 0:
-                break
-
-        lifetime = [sum(i) for i in masks]
-        lifetimes.extend(lifetime)
-        iterations.append(max(lifetime))
-
-        returns = [[] for _ in range(batch_size)]
-        for i in range(batch_size):
-            return_value = 0
-            gamma = 0.99
-            for r in reversed(rewards[i]):
-                return_value = r + gamma * return_value
-                returns[i].insert(0, return_value)
-
-        returns = torch.tensor(returns, device=device)
-        returns = (returns - returns.mean()) / (returns.std() + 1e-8)
         log_probs = torch.stack(log_probs, dim=-1)
-        masks = torch.tensor(masks, device=device)
+        rewards = torch.stack(rewards, dim=-1)
+        masks = torch.stack(masks, dim=-1)
+        # [batch_size, max_lifetime]
+        max_lifetime = masks.shape[1]
+
+        n_tracks += batch_size
+        sum_lifetime += masks.sum().item()
+        n_iterations += max_lifetime
+
+        returns = torch.zeros_like(rewards)
+        r = torch.zeros(batch_size, device=device)
+        for t in reversed(range(max_lifetime)):
+            r = rewards[:, t] + reward_gamma * r
+            returns[:, t] = r
+        returns = (returns - returns.mean()) / (returns.std() + 1e-8)
 
         loss = -(log_probs * returns * masks).sum() / masks.sum()
 
