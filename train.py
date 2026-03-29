@@ -18,23 +18,22 @@ if __name__ == "__main__":
     lr = 1e-3
     optimizer = Adam(model.parameters(), lr=lr)
 
-    solved_lifetime = 3600
+    solved_lifetime = 7200
 
     epoch = 0
-    verbose = 1
-
-    sum_lifetime = 0
-    sum_iterations = 0
+    print_interval = 5.0
+    lifetimes = []
+    iterations = []
     start_time = time.time()
     while True:
-        if epoch % verbose == 0 and epoch != 0:
-            avg_lifetime = sum_lifetime / (verbose * batch_size)
+        if time.time() - start_time > print_interval:
+            avg_lifetime = sum(lifetimes) / len(lifetimes) if len(lifetimes) else 0
             elapsed_time = time.time() - start_time
-            start_time = time.time()
-            avg_it_ps = sum_iterations / elapsed_time
+            avg_it_ps = sum(iterations) / elapsed_time
             print(f"epoch: {epoch}, avg lifetime: {avg_lifetime:.1f}, {avg_it_ps:.1f} it/s")
-            sum_lifetime = 0
-            sum_iterations = 0
+            lifetimes = []
+            iterations = []
+            start_time = time.time()
             pass
 
         states = [CartPoleState() for _ in range(batch_size)]
@@ -72,8 +71,8 @@ if __name__ == "__main__":
                 break
 
         lifetime = [sum(i) for i in masks]
-        sum_lifetime += sum(lifetime)
-        sum_iterations += max(lifetime)
+        lifetimes.extend(lifetime)
+        iterations.append(max(lifetime))
 
         returns = [[] for _ in range(batch_size)]
         for i in range(batch_size):
