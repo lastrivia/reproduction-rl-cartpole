@@ -10,18 +10,24 @@ if __name__ == '__main__':
     state = CartPoleState()
     model = CartPoleModel(hidden=128)
     model.load_state_dict(torch.load("cartpole-0329-2336-finished.pt"))
+    model.eval()
 
     fast_forward = 4
+    use_deterministic = True
 
-    while True:
-        logits = model(state.to_tensor())
-        probs = torch.softmax(logits, dim=-1)
+    with torch.no_grad():
+        while True:
+            logits = model(state.to_tensor())
+            probs = torch.softmax(logits, dim=-1)
 
-        dist = torch.distributions.Categorical(probs)
-        action = dist.sample().item()
-        force = -1.0 if action == 0 else 1.0
+            if use_deterministic:
+                action = torch.argmax(probs).item()
+            else:
+                dist = torch.distributions.Categorical(probs)
+                action = dist.sample().item()
+            force = -1.0 if action == 0 else 1.0
 
-        state = step(state, force)
-        window.drawcall(state)
-        window.tick(int(fps * fast_forward))
+            state = step(state, force)
+            window.drawcall(state)
+            window.tick(int(fps * fast_forward))
 
