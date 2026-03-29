@@ -2,7 +2,7 @@ import pygame
 
 from math import sin, cos
 
-from physics import CartPoleState, step, l_pole, fps as default_fps
+from physics import CartPoleState, step, l_pole, fps
 
 
 class CartPoleGraphics:
@@ -50,6 +50,11 @@ class CartPoleGraphics:
         pygame.display.flip()
 
     def tick(self, fps: int):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                exit()
+
         self.clock.tick(fps)
 
 
@@ -59,12 +64,8 @@ if __name__ == "__main__":
     force = 0.0
     window = CartPoleGraphics(width=800, height=600, scale=50)
     state = CartPoleState(0, 0, 0, 0)
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                exit()
 
+    while True:
         keys = pygame.key.get_pressed()
 
         if keys[pygame.K_a]:
@@ -74,4 +75,4 @@ if __name__ == "__main__":
 
         state = step(state, force)
         window.drawcall(state)
-        window.tick(default_fps)
+        window.tick(fps)
