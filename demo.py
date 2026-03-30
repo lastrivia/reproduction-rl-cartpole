@@ -6,13 +6,13 @@ from graphics import CartPoleGraphics
 
 if __name__ == '__main__':
 
-    window = CartPoleGraphics(width=800, height=600, scale=50)
+    window = CartPoleGraphics(width=1280, height=960, scale=100, aa_level=1.5)
     state = CartPoleState()
     model = CartPoleModel(hidden=128)
     model.load_state_dict(torch.load("cartpole-0329-2336-finished.pt"))
     model.eval()
 
-    fast_forward = 4
+    fast_forward = 10
     use_deterministic = True
 
     with torch.no_grad():
