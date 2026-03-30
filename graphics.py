@@ -16,7 +16,7 @@ class CartPoleGraphics:
         self.screen = pygame.display.set_mode((self.width, self.height))
         self.clock = pygame.time.Clock()
 
-    def drawcall(self, state: CartPoleState):
+    def drawcall(self, state: CartPoleState, show_fps: bool = False):
         canvas = pygame.Surface((self.width * self.aa_level, self.height * self.aa_level))
 
         canvas.fill((255, 255, 255))
@@ -56,6 +56,12 @@ class CartPoleGraphics:
         final = pygame.transform.smoothscale(canvas, (self.width, self.height))
         self.screen.blit(final, (0, 0))
 
+        current_fps = self.clock.get_fps()
+        if show_fps:
+            font = pygame.font.SysFont("consolas", 20)
+            fps_text = font.render(f"FPS: {current_fps:.0f}", True, (0, 0, 0))
+            self.screen.blit(fps_text, (10, 10))
+
         pygame.display.flip()
 
     def tick(self, fps: int):
@@ -83,5 +89,5 @@ if __name__ == "__main__":
             force = 1.0
 
         state = step(state, force)
-        window.drawcall(state)
+        window.drawcall(state, show_fps=True)
         window.tick(fps)

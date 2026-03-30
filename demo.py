@@ -49,6 +49,6 @@ if __name__ == '__main__':
                 force += 1.0
 
             state = step(state, force)
-            window.drawcall(state)
+            window.drawcall(state, show_fps=True)
             window.tick(int(fps * fast_forward))
 
