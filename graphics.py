@@ -47,7 +47,7 @@ class CartPoleGraphics:
 
         pygame.draw.line(
             surface=canvas,
-            color=(0, 0, 255),
+            color=(0, 0, 255) if state.is_alive else (255, 0, 0),
             start_pos=(cart_x_px, cart_y_px),
             end_pos=(pole_x_px, pole_y_px),
             width=line_width_px
